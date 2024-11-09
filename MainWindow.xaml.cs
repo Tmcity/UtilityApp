@@ -22,11 +22,16 @@ namespace UtilityApp
             StartMonitoring();
         }
 
-        private void AutoSave_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) => SaveSettings();
+        private void AutoSave_TextChanged(object sender, TextChangedEventArgs e) => SaveSettings();
         private void AutoSave_Checked(object sender, RoutedEventArgs e) => SaveSettings();
 
         private void InitializeSettings()
         {
+            GatewayAddressTextBox.Text = Properties.Settings.Default.GatewayAddress;
+            CheckIntervalTextBox.Text = Properties.Settings.Default.CheckInterval.ToString();
+            ShutdownThresholdTextBox.Text = Properties.Settings.Default.ShutdownThreshold.ToString();
+            EnableCheckBox.IsChecked = Properties.Settings.Default.EnableCheck;
+            DebugCheckBox.IsChecked = Properties.Settings.Default.DebugCheck;
             StatusTextBlock?.SetText("未开始");
         }
 
@@ -34,12 +39,16 @@ namespace UtilityApp
         {
             if (!ValidateControls()) return;
 
-            string gatewayAddress = GatewayAddressTextBox.Text;
+            Properties.Settings.Default.GatewayAddress = GatewayAddressTextBox.Text;
             if (!TryParseInt(CheckIntervalTextBox.Text, out int checkInterval) ||
                 !TryParseInt(ShutdownThresholdTextBox.Text, out int shutdownThreshold)) return;
 
-            bool isEnabled = EnableCheckBox.IsChecked ?? false;
-            bool isDebug = DebugCheckBox.IsChecked ?? false;
+            Properties.Settings.Default.CheckInterval = checkInterval;
+            Properties.Settings.Default.ShutdownThreshold = shutdownThreshold;
+            Properties.Settings.Default.EnableCheck = EnableCheckBox.IsChecked ?? false;
+            Properties.Settings.Default.DebugCheck = DebugCheckBox.IsChecked ?? false;
+
+            Properties.Settings.Default.Save();
 
             StatusTextBlock.Text = "设置已自动保存";
             StartMonitoring();

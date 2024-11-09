@@ -1,0 +1,9 @@
+﻿<Window x:Class="UtilityApp.ShutdownCountdownWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="关机倒计时" Height="200" Width="300">
+    <Grid>
+        <TextBlock x:Name="CountdownTextBlock" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"/>
+        <Button Content="取消" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20" Click="CancelButton_Click"/>
+    </Grid>
+</Window>

@@ -5,17 +5,17 @@
     <Grid>
         <StackPanel Margin="10">
             <TextBlock Text="网关地址:" />
-            <TextBox Name="GatewayAddressTextBox" Text="192.168.1.1" />
+            <TextBox Name="GatewayAddressTextBox" Text="192.168.1.1" TextChanged="AutoSave_TextChanged" />
 
             <TextBlock Text="检查间隔 (毫秒):" Margin="0,10,0,0" />
-            <TextBox Name="CheckIntervalTextBox" Text="10000" />
+            <TextBox Name="CheckIntervalTextBox" Text="10000" TextChanged="AutoSave_TextChanged" />
 
             <TextBlock Text="断电时间阈值 (毫秒):" Margin="0,10,0,0" />
-            <TextBox Name="ShutdownThresholdTextBox" Text="60000" />
+            <TextBox Name="ShutdownThresholdTextBox" Text="60000" TextChanged="AutoSave_TextChanged" />
 
-            <CheckBox Name="EnableCheckBox" Content="启用检测" IsChecked="True" Margin="0,10,0,0" />
+            <CheckBox Name="EnableCheckBox" Content="启用检测" IsChecked="True" Margin="0,10,0,0" Checked="AutoSave_Checked" Unchecked="AutoSave_Checked" />
 
-            <CheckBox Name="DebugCheckBox" Content="调试模式" IsChecked="False" Margin="0,10,0,0" />
+            <CheckBox Name="DebugCheckBox" Content="调试模式" IsChecked="False" Margin="0,10,0,0" Checked="AutoSave_Checked" Unchecked="AutoSave_Checked" />
 
             <Button Name="ApplyButton" Content="应用更改" Click="ApplyButton_Click" Margin="0,10,0,0" />
 

@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Net.NetworkInformation;
 using System.Threading;
 using System.Windows;
+using System.Windows.Controls;
 
 namespace UtilityApp
 {
@@ -10,40 +11,85 @@ namespace UtilityApp
     {
         private Timer _timer;
         private DateTime? _powerOutageStartTime;
+        private bool _shutdownTriggered;
+        private bool _countdownInProgress;
+        private readonly object _lockObject = new object();
 
         public MainWindow()
         {
             InitializeComponent();
+            InitializeSettings();
             StartMonitoring();
+        }
+
+        private void AutoSave_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e) => SaveSettings();
+        private void AutoSave_Checked(object sender, RoutedEventArgs e) => SaveSettings();
+
+        private void InitializeSettings()
+        {
+            StatusTextBlock?.SetText("未开始");
+        }
+
+        private void SaveSettings()
+        {
+            if (!ValidateControls()) return;
+
+            string gatewayAddress = GatewayAddressTextBox.Text;
+            if (!TryParseInt(CheckIntervalTextBox.Text, out int checkInterval) ||
+                !TryParseInt(ShutdownThresholdTextBox.Text, out int shutdownThreshold)) return;
+
+            bool isEnabled = EnableCheckBox.IsChecked ?? false;
+            bool isDebug = DebugCheckBox.IsChecked ?? false;
+
+            StatusTextBlock.Text = "设置已自动保存";
+            StartMonitoring();
+        }
+
+        private bool ValidateControls()
+        {
+            return GatewayAddressTextBox != null && CheckIntervalTextBox != null &&
+                   ShutdownThresholdTextBox != null && EnableCheckBox != null &&
+                   DebugCheckBox != null && StatusTextBlock != null;
+        }
+
+        private bool TryParseInt(string text, out int result)
+        {
+            if (int.TryParse(text, out result)) return true;
+            MessageBox.Show("请输入有效的整数");
+            return false;
         }
 
         private void StartMonitoring()
         {
-            if (EnableCheckBox.IsChecked == true)
+            lock (_lockObject)
             {
+                ResetFlags();
+
+                if (!EnableCheckBox.IsChecked == true || !ValidateControls()) return;
+
                 string gatewayAddress = GatewayAddressTextBox.Text;
-                if (!int.TryParse(CheckIntervalTextBox.Text, out int checkInterval))
-                {
-                    MessageBox.Show("检查间隔必须是一个有效的整数。");
-                    return;
-                }
-                if (!int.TryParse(ShutdownThresholdTextBox.Text, out int shutdownThreshold))
-                {
-                    MessageBox.Show("断电时间阈值必须是一个有效的整数。");
-                    return;
-                }
+                if (!TryParseInt(CheckIntervalTextBox.Text, out int checkInterval) ||
+                    !TryParseInt(ShutdownThresholdTextBox.Text, out int shutdownThreshold)) return;
 
                 _timer?.Dispose();
                 _timer = new Timer(CheckGateway, new object[] { gatewayAddress, shutdownThreshold }, 0, checkInterval);
-                StatusTextBlock.Text = "检测中...";
-                Log("检测已启动");
+                UpdateUI("检测中...", "检测已启动");
             }
-            else
+        }
+
+        private void ResetFlags()
+        {
+            _shutdownTriggered = false;
+            _countdownInProgress = false;
+        }
+
+        private void UpdateUI(string status, string logMessage)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
             {
-                StatusTextBlock.Text = "检测已禁用";
-                _timer?.Dispose();
-                Log("检测已禁用");
-            }
+                StatusTextBlock.Text = status;
+                Log(logMessage);
+            }));
         }
 
         private void CheckGateway(object state)
@@ -56,12 +102,10 @@ namespace UtilityApp
             {
                 try
                 {
-                    PingReply reply = ping.Send(gatewayAddress);
+                    PingReply reply = ping.Send(gatewayAddress, 1000);
                     if (reply.Status == IPStatus.Success)
                     {
-                        _powerOutageStartTime = null; // 网关可达，重置断电开始时间
-                        Dispatcher.Invoke(() => StatusTextBlock.Text = "网关可达");
-                        Log($"网关 {gatewayAddress} 可达，延迟 {reply.RoundtripTime} 毫秒");
+                        HandleGatewayReachable(gatewayAddress, reply);
                     }
                     else
                     {
@@ -76,34 +120,90 @@ namespace UtilityApp
             }
         }
 
+        private void HandleGatewayReachable(string gatewayAddress, PingReply reply)
+        {
+            lock (_lockObject)
+            {
+                _powerOutageStartTime = null;
+            }
+            UpdateUI($"网关 {gatewayAddress} 可达，延迟 {reply.RoundtripTime} 毫秒", $"网关 {gatewayAddress} 可达");
+        }
+
         private void HandlePowerOutage(string gatewayAddress, int shutdownThreshold)
         {
-            if (_powerOutageStartTime == null)
+            lock (_lockObject)
             {
-                _powerOutageStartTime = DateTime.Now; // 记录断电开始时间
-                Dispatcher.Invoke(() => StatusTextBlock.Text = "网关不可达");
-                Log($"网关 {gatewayAddress} 不可达");
-            }
-            else if ((DateTime.Now - _powerOutageStartTime.Value).TotalMilliseconds > shutdownThreshold)
-            {
-                Dispatcher.Invoke(() => StatusTextBlock.Text = "关机中...");
-                Log("关机中...");
-                Dispatcher.Invoke(() =>
+                if (_shutdownTriggered || _countdownInProgress) return;
+
+                if (_powerOutageStartTime == null)
                 {
-                    if (DebugCheckBox.IsChecked == true)
+                    _powerOutageStartTime = DateTime.Now;
+                    UpdateUI("网关不可达", $"网关 {gatewayAddress} 不可达");
+                }
+                else if ((DateTime.Now - _powerOutageStartTime.Value).TotalMilliseconds > shutdownThreshold)
+                {
+                    _shutdownTriggered = true;
+                    _timer?.Dispose();
+                    Dispatcher.BeginInvoke(new Action(() =>
                     {
-                        MessageBox.Show("已关机（调试模式）");
-                    }
-                    else
+                        UpdateUI("关机中...", "关机中...");
+                        if (DebugCheckBox.IsChecked == true)
+                        {
+                            MessageBox.Show("已关机（调试模式）");
+                        }
+                        else
+                        {
+                            ShowShutdownCountdown();
+                        }
+                    }));
+                }
+            }
+        }
+
+        private void ShowShutdownCountdown()
+        {
+            lock (_lockObject)
+            {
+                if (_countdownInProgress) return;
+                _countdownInProgress = true;
+            }
+
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var countdownWindow = new ShutdownCountdownWindow(30);
+                countdownWindow.CountdownCancelled += CountdownWindow_CountdownCancelled;
+                countdownWindow.Closed += (s, e) =>
+                {
+                    lock (_lockObject)
                     {
-                        ShutdownComputer();
+                        _countdownInProgress = false;
+                        if (!_shutdownTriggered) UpdateUI("关机已取消", "关机已取消");
                     }
-                });
+                };
+
+                if (countdownWindow.ShowDialog() == true && !countdownWindow.IsCancelled)
+                {
+                    ShutdownComputer();
+                }
+            }));
+        }
+
+        private void CountdownWindow_CountdownCancelled(object sender, EventArgs e)
+        {
+            lock (_lockObject)
+            {
+                _countdownInProgress = false;
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    EnableCheckBox.IsChecked = false;
+                    UpdateUI("检测已禁用", "检测已禁用");
+                }));
             }
         }
 
         private void ShutdownComputer()
         {
+            Log("即将执行关机命令");
             Process.Start(new ProcessStartInfo("shutdown", "/s /t 0")
             {
                 CreateNoWindow = true,
@@ -113,16 +213,25 @@ namespace UtilityApp
 
         private void Log(string message)
         {
-            Dispatcher.Invoke(() =>
+            Dispatcher.BeginInvoke(new Action(() =>
             {
                 LogTextBox.AppendText($"{DateTime.Now}: {message}{Environment.NewLine}");
                 LogTextBox.ScrollToEnd();
-            });
+            }));
         }
 
         private void ApplyButton_Click(object sender, RoutedEventArgs e)
         {
             StartMonitoring();
+        }
+    }
+
+    // Extension method for TextBlock text update
+    public static class UIExtensions
+    {
+        public static void SetText(this TextBlock textBlock, string text)
+        {
+            if (textBlock != null) textBlock.Text = text;
         }
     }
 }

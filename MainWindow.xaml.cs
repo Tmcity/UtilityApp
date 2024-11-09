@@ -4,6 +4,12 @@ using System.Net.NetworkInformation;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Forms;
+using System.Drawing;
+using MessageBox = System.Windows.MessageBox;
+using Timer = System.Threading.Timer;
+using Application = System.Windows.Application;
+
 
 namespace UtilityApp
 {
@@ -14,12 +20,58 @@ namespace UtilityApp
         private bool _shutdownTriggered;
         private bool _countdownInProgress;
         private readonly object _lockObject = new object();
+        private NotifyIcon _notifyIcon;
 
         public MainWindow()
         {
             InitializeComponent();
             InitializeSettings();
+            InitializeNotifyIcon();
             StartMonitoring();
+        }
+
+        private void InitializeNotifyIcon()
+        {
+            // 创建 ContextMenuStrip 并添加菜单项
+            var contextMenu = new ContextMenuStrip();
+            var showMenuItem = new ToolStripMenuItem("显示");
+            var exitMenuItem = new ToolStripMenuItem("退出");
+
+            showMenuItem.Click += (s, e) => ShowMainWindow();
+            exitMenuItem.Click += (s, e) => ExitApplication();
+
+            contextMenu.Items.Add(showMenuItem);
+            contextMenu.Items.Add(exitMenuItem);
+
+            // 初始化 NotifyIcon 并关联 ContextMenuStrip
+            _notifyIcon = new NotifyIcon
+            {
+                Icon = new Icon("app.ico"), // 确保项目中有一个名为 app.ico 的图标文件
+                Visible = true,
+                Text = "UtilityApp",
+                ContextMenuStrip = contextMenu
+            };
+            _notifyIcon.DoubleClick += (s, e) => ShowMainWindow();
+        }
+
+        private void ExitApplication()
+        {
+            _notifyIcon.Visible = false; // 隐藏托盘图标
+            Application.Current.Shutdown(); // 关闭应用程序
+        }
+
+        private void ShowMainWindow()
+        {
+            Show();
+            WindowState = WindowState.Normal;
+            Activate();
+        }
+
+        protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+        {
+            e.Cancel = true; // 取消关闭事件
+            Hide(); // 隐藏窗口
+            base.OnClosing(e);
         }
 
         private void AutoSave_TextChanged(object sender, TextChangedEventArgs e) => SaveSettings();

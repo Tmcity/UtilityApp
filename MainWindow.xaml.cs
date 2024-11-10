@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Diagnostics;
 using System.Net.NetworkInformation;
 using System.Threading;
@@ -6,6 +7,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
 using System.Drawing;
+using Microsoft.Win32;
+using IWshRuntimeLibrary; // 引用 Windows Script Host Object Model
 using MessageBox = System.Windows.MessageBox;
 using Timer = System.Threading.Timer;
 using Application = System.Windows.Application;
@@ -22,6 +25,10 @@ namespace UtilityApp
         private readonly object _lockObject = new object();
         private NotifyIcon _notifyIcon;
         private bool isLoadingSettings = true;
+        private const string AutoStartRegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        private const string AppName = "UtilityApp";
+        private readonly string startupFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
+
 
         public MainWindow()
         {
@@ -29,14 +36,12 @@ namespace UtilityApp
             isLoadingSettings = true; // 标志设置为 true，防止初始化过程中的事件触发
             this.Loaded += MainWindow_Loaded;
             InitializeNotifyIcon();
-            //StartMonitoring();
         }
 
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             LoadSettings(); // 加载设置
-
-            isLoadingSettings = false; // 完成加载后，设置为 false
+            isLoadingSettings = false;
             Debug.WriteLine("初始化完成.");
 
             // 根据加载的设置决定是否启动检测
@@ -96,20 +101,33 @@ namespace UtilityApp
         private void AutoSave_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (isLoadingSettings) return; // 防止初始化时事件触发
-            Debug.WriteLine("AutoSave_TextChanged triggered.");
+            Debug.WriteLine("已触发AutoSave_TextChanged.");
             SaveSettings();
         }
 
         private void AutoSave_Checked(object sender, RoutedEventArgs e)
         {
             if (isLoadingSettings) return; // 防止初始化时事件触发
-            Debug.WriteLine("AutoSave_Checked triggered.");
+            Debug.WriteLine("已触发AutoSave_Checked.");
             SaveSettings();
+        }
+        private void AutoStart_Checked(object sender, RoutedEventArgs e)
+        {
+            if (isLoadingSettings) return; // 防止初始化时事件触发
+            Debug.WriteLine("已触发AutoStart_Checked.");
+            SetAutoStart(true);
+        }
+
+        private void AutoStart_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (isLoadingSettings) return; // 防止初始化时事件触发
+            Debug.WriteLine("已触发AutoStart_Unchecked.");
+            SetAutoStart(false);
         }
 
         private void LoadSettings()
         {
-            isLoadingSettings = true; // 开始初始化
+            isLoadingSettings = true;
 
             // 加载设置到控件
             GatewayAddressTextBox.Text = Properties.Settings.Default.GatewayAddress;
@@ -117,17 +135,16 @@ namespace UtilityApp
             ShutdownThresholdTextBox.Text = Properties.Settings.Default.ShutdownThreshold.ToString();
             EnableCheckBox.IsChecked = Properties.Settings.Default.EnableCheck;
             DebugCheckBox.IsChecked = Properties.Settings.Default.DebugCheck;
+            AutoStartCheckBox.IsChecked = Properties.Settings.Default.AutoStart;
 
-            Debug.WriteLine("加载设置:");
-            Debug.WriteLine($"网关地址: {Properties.Settings.Default.GatewayAddress}");
-            Debug.WriteLine($"检查时间间隔: {Properties.Settings.Default.CheckInterval}");
-            Debug.WriteLine($"关机阈值: {Properties.Settings.Default.ShutdownThreshold}");
-            Debug.WriteLine($"启用检测: {Properties.Settings.Default.EnableCheck}");
-            Debug.WriteLine($"调试模式: {Properties.Settings.Default.DebugCheck}");
+            Debug.WriteLine("Settings loaded.");
 
-            isLoadingSettings = false; // 完成初始化
+            // 设置开机自启状态
+            SetAutoStart(Properties.Settings.Default.AutoStart);
 
-            // 在加载完成后再绑定事件
+            isLoadingSettings = false;
+
+            // 事件绑定
             CheckIntervalTextBox.TextChanged += AutoSave_TextChanged;
             ShutdownThresholdTextBox.TextChanged += AutoSave_TextChanged;
             GatewayAddressTextBox.TextChanged += AutoSave_TextChanged;
@@ -135,8 +152,10 @@ namespace UtilityApp
             EnableCheckBox.Unchecked += AutoSave_Checked;
             DebugCheckBox.Checked += AutoSave_Checked;
             DebugCheckBox.Unchecked += AutoSave_Checked;
+            AutoStartCheckBox.Checked += AutoStart_CheckedChanged;
+            AutoStartCheckBox.Unchecked += AutoStart_CheckedChanged;
 
-            Debug.WriteLine("初始化完成。");
+            Debug.WriteLine("初始化完成");
         }
 
         private void SaveSettings()
@@ -158,8 +177,11 @@ namespace UtilityApp
             Properties.Settings.Default.ShutdownThreshold = shutdownThreshold;
             Properties.Settings.Default.EnableCheck = EnableCheckBox.IsChecked ?? false;
             Properties.Settings.Default.DebugCheck = DebugCheckBox.IsChecked ?? false;
+            Properties.Settings.Default.AutoStart = AutoStartCheckBox.IsChecked ?? false;
 
             Properties.Settings.Default.Save();
+
+            SetAutoStart(Properties.Settings.Default.AutoStart); // 更新开机自启设置
 
             StatusTextBlock.Text = "设置已自动保存";
 
@@ -173,6 +195,73 @@ namespace UtilityApp
             {
                 StopMonitoring();
                 Debug.WriteLine("检测已关闭。");
+            }
+        }
+
+        private void AutoStart_CheckedChanged(object sender, RoutedEventArgs e)
+        {
+            if (!isLoadingSettings)
+            {
+                SaveSettings(); // 自动保存设置
+            }
+        }
+
+        private void SetAutoStart(bool enable)
+        {
+            string shortcutPath = Path.Combine(startupFolderPath, $"{AppName}.lnk");
+
+            using (RegistryKey key = Registry.CurrentUser.OpenSubKey(AutoStartRegistryKey, true))
+            {
+                if (key == null) return;
+
+                if (enable)
+                {
+                    // 获取应用程序的 .exe 路径
+                    string appPath = System.IO.Path.Combine(AppContext.BaseDirectory, "UtilityApp.exe");
+                    CreateShortcut(shortcutPath, appPath);
+                    Debug.WriteLine($"快捷方式已创建: {shortcutPath}");
+                    if (System.IO.File.Exists(appPath))
+                    {
+                        // 添加双引号以确保路径正确（尤其当路径包含空格时）
+                        key.SetValue(AppName, $"\"{appPath}\"");
+                        Debug.WriteLine($"开机自启已启用，路径：{appPath}");
+                    }
+                    else
+                    {
+                        Debug.WriteLine("未找到 .exe 文件，请检查发布路径。");
+                        MessageBox.Show("未找到 .exe 文件，无法设置开机自启。请检查发布路径。");
+                    }
+                }
+                else
+                {
+                    key.DeleteValue(AppName, false);
+                    Debug.WriteLine("开机自启已禁用。");
+                    RemoveShortcut(shortcutPath);
+                    Debug.WriteLine("快捷方式已删除.");
+                }
+            }
+        }
+
+        private void CreateShortcut(string shortcutPath,string appPath)
+        {
+            if (!System.IO.File.Exists(shortcutPath))
+            {
+                var shell = new WshShell();
+                IWshShortcut shortcut = (IWshShortcut)shell.CreateShortcut(shortcutPath);
+
+                shortcut.TargetPath = appPath;
+                shortcut.WorkingDirectory = AppContext.BaseDirectory;
+                shortcut.WindowStyle = 1; // 正常窗口
+                shortcut.Description = $"{AppName} - 开机自启";
+                shortcut.Save();
+            }
+        }
+
+        private void RemoveShortcut(string shortcutPath)
+        {
+            if (System.IO.File.Exists(shortcutPath))
+            {
+                System.IO.File.Delete(shortcutPath);
             }
         }
 
@@ -349,7 +438,7 @@ namespace UtilityApp
 
             Dispatcher.BeginInvoke(new Action(() =>
             {
-                var countdownWindow = new ShutdownCountdownWindow(30);
+                var countdownWindow = new ShutdownCountdownWindow(120);
                 countdownWindow.CountdownCancelled += CountdownWindow_CountdownCancelled;
                 countdownWindow.Closed += (s, e) =>
                 {

@@ -21,13 +21,30 @@ namespace UtilityApp
         private bool _countdownInProgress;
         private readonly object _lockObject = new object();
         private NotifyIcon _notifyIcon;
+        private bool isLoadingSettings = true;
 
         public MainWindow()
         {
             InitializeComponent();
-            InitializeSettings();
+            isLoadingSettings = true; // 标志设置为 true，防止初始化过程中的事件触发
+            this.Loaded += MainWindow_Loaded;
             InitializeNotifyIcon();
-            StartMonitoring();
+            //StartMonitoring();
+        }
+
+        private void MainWindow_Loaded(object sender, RoutedEventArgs e)
+        {
+            LoadSettings(); // 加载设置
+
+            isLoadingSettings = false; // 完成加载后，设置为 false
+            Debug.WriteLine("初始化完成.");
+
+            // 根据加载的设置决定是否启动检测
+            if (EnableCheckBox.IsChecked == true)
+            {
+                StartMonitoring();
+                Debug.WriteLine("检测已根据用户设置启动。");
+            }
         }
 
         private void InitializeNotifyIcon()
@@ -74,17 +91,52 @@ namespace UtilityApp
             base.OnClosing(e);
         }
 
-        private void AutoSave_TextChanged(object sender, TextChangedEventArgs e) => SaveSettings();
-        private void AutoSave_Checked(object sender, RoutedEventArgs e) => SaveSettings();
-
-        private void InitializeSettings()
+        //private void AutoSave_TextChanged(object sender, TextChangedEventArgs e) => SaveSettings();
+        //private void AutoSave_Checked(object sender, RoutedEventArgs e) => SaveSettings();
+        private void AutoSave_TextChanged(object sender, TextChangedEventArgs e)
         {
+            if (isLoadingSettings) return; // 防止初始化时事件触发
+            Debug.WriteLine("AutoSave_TextChanged triggered.");
+            SaveSettings();
+        }
+
+        private void AutoSave_Checked(object sender, RoutedEventArgs e)
+        {
+            if (isLoadingSettings) return; // 防止初始化时事件触发
+            Debug.WriteLine("AutoSave_Checked triggered.");
+            SaveSettings();
+        }
+
+        private void LoadSettings()
+        {
+            isLoadingSettings = true; // 开始初始化
+
+            // 加载设置到控件
             GatewayAddressTextBox.Text = Properties.Settings.Default.GatewayAddress;
             CheckIntervalTextBox.Text = Properties.Settings.Default.CheckInterval.ToString();
             ShutdownThresholdTextBox.Text = Properties.Settings.Default.ShutdownThreshold.ToString();
             EnableCheckBox.IsChecked = Properties.Settings.Default.EnableCheck;
             DebugCheckBox.IsChecked = Properties.Settings.Default.DebugCheck;
-            StatusTextBlock?.SetText("未开始");
+
+            Debug.WriteLine("加载设置:");
+            Debug.WriteLine($"网关地址: {Properties.Settings.Default.GatewayAddress}");
+            Debug.WriteLine($"检查时间间隔: {Properties.Settings.Default.CheckInterval}");
+            Debug.WriteLine($"关机阈值: {Properties.Settings.Default.ShutdownThreshold}");
+            Debug.WriteLine($"启用检测: {Properties.Settings.Default.EnableCheck}");
+            Debug.WriteLine($"调试模式: {Properties.Settings.Default.DebugCheck}");
+
+            isLoadingSettings = false; // 完成初始化
+
+            // 在加载完成后再绑定事件
+            CheckIntervalTextBox.TextChanged += AutoSave_TextChanged;
+            ShutdownThresholdTextBox.TextChanged += AutoSave_TextChanged;
+            GatewayAddressTextBox.TextChanged += AutoSave_TextChanged;
+            EnableCheckBox.Checked += AutoSave_Checked;
+            EnableCheckBox.Unchecked += AutoSave_Checked;
+            DebugCheckBox.Checked += AutoSave_Checked;
+            DebugCheckBox.Unchecked += AutoSave_Checked;
+
+            Debug.WriteLine("初始化完成。");
         }
 
         private void SaveSettings()
@@ -92,8 +144,15 @@ namespace UtilityApp
             if (!ValidateControls()) return;
 
             Properties.Settings.Default.GatewayAddress = GatewayAddressTextBox.Text;
-            if (!TryParseInt(CheckIntervalTextBox.Text, out int checkInterval) ||
-                !TryParseInt(ShutdownThresholdTextBox.Text, out int shutdownThreshold)) return;
+
+            if (!TryParseInt(CheckIntervalTextBox.Text, out int checkInterval))
+            {
+                checkInterval = 10000; // 提供默认值
+            }
+            if (!TryParseInt(ShutdownThresholdTextBox.Text, out int shutdownThreshold))
+            {
+                shutdownThreshold = 60000; // 提供默认值
+            }
 
             Properties.Settings.Default.CheckInterval = checkInterval;
             Properties.Settings.Default.ShutdownThreshold = shutdownThreshold;
@@ -103,19 +162,63 @@ namespace UtilityApp
             Properties.Settings.Default.Save();
 
             StatusTextBlock.Text = "设置已自动保存";
-            StartMonitoring();
+
+            // 检查是否启用检测，启用时重新启动检测；否则停止检测
+            if (EnableCheckBox.IsChecked == true)
+            {
+                StartMonitoring();
+                Debug.WriteLine("检测已根据新设置重新启动。");
+            }
+            else
+            {
+                StopMonitoring();
+                Debug.WriteLine("检测已关闭。");
+            }
         }
 
         private bool ValidateControls()
         {
-            return GatewayAddressTextBox != null && CheckIntervalTextBox != null &&
-                   ShutdownThresholdTextBox != null && EnableCheckBox != null &&
-                   DebugCheckBox != null && StatusTextBlock != null;
+            if (isLoadingSettings) return true; // 初始化阶段直接跳过验证
+
+            Debug.WriteLine("验证控件...");
+            bool isValid = true;
+
+            // 示例验证逻辑
+            if (string.IsNullOrWhiteSpace(GatewayAddressTextBox.Text))
+            {
+                Debug.WriteLine("网关地址为空或无效");
+                MessageBox.Show("网关地址为空或无效");
+                // 将数值改为更改前
+                GatewayAddressTextBox.Text = Properties.Settings.Default.GatewayAddress;
+                isValid = false;
+            }
+
+            if (!int.TryParse(CheckIntervalTextBox.Text, out _))
+            {
+                Debug.WriteLine("检查时间间隔不是有效整数");
+                MessageBox.Show("检查时间间隔不是有效整数");
+                // 将数值改为更改前
+                CheckIntervalTextBox.Text = Properties.Settings.Default.CheckInterval.ToString();
+                isValid = false;
+            }
+
+            if (!int.TryParse(ShutdownThresholdTextBox.Text, out _))
+            {
+                Debug.WriteLine("关机阈值不是有效整数");
+                MessageBox.Show("关机阈值不是有效整数");
+                // 将数值改为更改前
+                ShutdownThresholdTextBox.Text = Properties.Settings.Default.ShutdownThreshold.ToString();
+                isValid = false;
+            }
+
+            return isValid;
         }
 
         private bool TryParseInt(string text, out int result)
         {
+            Debug.WriteLine("尝试解析Int");
             if (int.TryParse(text, out result)) return true;
+            Debug.WriteLine("请输入有效的整数");
             MessageBox.Show("请输入有效的整数");
             return false;
         }
@@ -124,17 +227,32 @@ namespace UtilityApp
         {
             lock (_lockObject)
             {
+                StopMonitoring(); // 确保在启动新检测前停止先前的检测
+
                 ResetFlags();
 
                 if (!EnableCheckBox.IsChecked == true || !ValidateControls()) return;
 
                 string gatewayAddress = GatewayAddressTextBox.Text;
+
                 if (!TryParseInt(CheckIntervalTextBox.Text, out int checkInterval) ||
                     !TryParseInt(ShutdownThresholdTextBox.Text, out int shutdownThreshold)) return;
 
-                _timer?.Dispose();
                 _timer = new Timer(CheckGateway, new object[] { gatewayAddress, shutdownThreshold }, 0, checkInterval);
                 UpdateUI("检测中...", "检测已启动");
+            }
+        }
+
+        private void StopMonitoring()
+        {
+            lock (_lockObject)
+            {
+                if (_timer != null)
+                {
+                    _timer.Dispose();
+                    _timer = null;
+                    Debug.WriteLine("检测已停止。");
+                }
             }
         }
 

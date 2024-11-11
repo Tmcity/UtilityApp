@@ -1,11 +1,13 @@
 ﻿using System;
 using System.IO;
+using System.Text;
 using System.Drawing;
 using System.Windows;
 using System.Windows.Forms;
 using System.Windows.Controls;
 using System.Net.NetworkInformation;
 using System.Diagnostics;
+using System.Windows.Input;
 using IWshRuntimeLibrary;
 using Microsoft.Win32;
 using Timer = System.Threading.Timer;
@@ -18,25 +20,37 @@ namespace UtilityApp
     {
         // 定时器，用于定时检测网关
         private Timer _timer;
+
         // 记录停电开始时间
         private DateTime? _powerOutageStartTime;
+
         // 标志是否已触发关机
         private bool _shutdownTriggered;
+
         // 标志是否正在进行关机倒计时
         private bool _countdownInProgress;
+
         // 锁对象，用于线程同步
         private readonly object _lockObject = new object();
+
         // 系统托盘图标
         private NotifyIcon _notifyIcon;
+
         // 标志是否正在加载设置
         private bool isLoadingSettings = true;
+
         // 注册表项路径
         private const string AutoStartRegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+
         // 应用程序名称
         private const string AppName = "UtilityApp";
+
         // 启动文件夹路径
         private readonly string startupFolderPath = Environment.GetFolderPath(Environment.SpecialFolder.Startup);
 
+        // 委托，用于自动保存设置
+        private delegate void AutoSaveAction();
+        
         /// <summary>
         /// 构造主窗口
         /// </summary>
@@ -85,7 +99,8 @@ namespace UtilityApp
                 ContextMenuStrip = new ContextMenuStrip
                 {
                     // 添加并绑定菜单项
-                    Items = {
+                    Items =
+                    {
                         new ToolStripMenuItem("显示", null, (s, e) => ShowMainWindow()),
                         new ToolStripMenuItem("退出", null, (s, e) => ExitApplication())
                     }
@@ -138,45 +153,31 @@ namespace UtilityApp
         /// </summary>
         /// <param name="sender">事件发送者</param>
         /// <param name="e">事件参数</param>
-        private void AutoSave_TextChanged(object sender, TextChangedEventArgs e)
-        {
-            // 防止初始化时事件触发
-            if (isLoadingSettings) return;
-            // 自动保存设置
-            SaveSettings();
-        }
+        private void AutoSave_TextChanged(object sender, TextChangedEventArgs e) => ExecuteAutoSaveAction(SaveSettings);
 
         /// <summary>
         /// 复选框选中事件处理
         /// </summary>
-        /// <param name="sender">事件发送者</param>
-        /// <param name="e">事件参数</param>
-        private void AutoSave_Checked(object sender, RoutedEventArgs e)
-        {
-            if (isLoadingSettings) return;
-            SaveSettings();
-        }
-
+        private void AutoSave_Checked(object sender, RoutedEventArgs e) => ExecuteAutoSaveAction(SaveSettings);
+        
         /// <summary>
         /// 开机自启复选框选中事件处理
         /// </summary>
-        /// <param name="sender">事件发送者</param>
-        /// <param name="e">事件参数</param>
-        private void AutoStart_Checked(object sender, RoutedEventArgs e)
-        {
-            if (isLoadingSettings) return;
-            SetAutoStart(true);
-        }
+        private void AutoStart_Checked() => ExecuteAutoSaveAction(() => SetAutoStart(true));
 
         /// <summary>
         /// 开机自启复选框取消选中事件处理
         /// </summary>
-        /// <param name="sender">事件发送者</param>
-        /// <param name="e">事件参数</param>
-        private void AutoStart_Unchecked(object sender, RoutedEventArgs e)
+        private void AutoStart_Unchecked() => ExecuteAutoSaveAction(() => SetAutoStart(false));
+        
+        /// <summary>
+        /// 执行自动保存操作
+        /// </summary>
+        /// <param name="action">自动保存操作</param>
+        private void ExecuteAutoSaveAction(AutoSaveAction action)
         {
             if (isLoadingSettings) return;
-            SetAutoStart(false);
+            action();
         }
 
         /// <summary>
@@ -184,6 +185,7 @@ namespace UtilityApp
         /// </summary>
         private void LoadSettings()
         {
+            // 标志设置为 true，防止初始化过程中的事件触发
             isLoadingSettings = true;
 
             // 加载设置到组件
@@ -359,7 +361,7 @@ namespace UtilityApp
 
             return isValid;
         }
-
+        
         /// <summary>
         /// 尝试解析整数(计划弃用)
         /// </summary>
@@ -599,18 +601,33 @@ namespace UtilityApp
         // 记录日志
         private void Log(string message)
         {
+            // 使用 StringBuilder 构建日志消息
+            StringBuilder logBuilder = new StringBuilder();
+            logBuilder.AppendFormat("{0}: {1}{2}", DateTime.Now, message, Environment.NewLine);
+
             // 更新UI
             Dispatcher.BeginInvoke(() =>
             {
-                LogTextBox.AppendText($"{DateTime.Now}: {message}{Environment.NewLine}");
+                LogTextBox.AppendText(logBuilder.ToString());
                 LogTextBox.ScrollToEnd();
             });
         }
+        
+        private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            if (e.ClickCount == 2)
+            {
+                this.WindowState = this.WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+            }
+            else
+            {
+                this.DragMove();
+            }
+        }
 
-        // 应用按钮点击事件(弃用)
-        //private void ApplyButton_Click(object sender, RoutedEventArgs e)
-        //{
-        //    SaveSettings();
-        //}
+        private void CloseButton_Click(object sender, RoutedEventArgs e)
+        {
+            this.Close();
+        }
     }
 }

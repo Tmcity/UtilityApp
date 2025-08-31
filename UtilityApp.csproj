@@ -22,12 +22,19 @@
     <GenerateAssemblyInfo>True</GenerateAssemblyInfo>
     <UseWPF>true</UseWPF>
     <ImportWindowsDesktopTargets>true</ImportWindowsDesktopTargets>
+    <AssemblyName>PowerGuard</AssemblyName>
+    <RootNamespace>PowerGuard</RootNamespace>
+    <Product>PowerGuard</Product>
+    <AssemblyTitle>PowerGuard</AssemblyTitle>
+    <AssemblyDescription>网络断电自动关机工具</AssemblyDescription>
+    <AssemblyCompany>PowerGuard</AssemblyCompany>
+    <Copyright>Copyright © 2025 Skyriu233</Copyright>
   </PropertyGroup>
   <PropertyGroup>
     <ManifestCertificateThumbprint>20E58400C5FE7E55F2278200DE907D6BB7CD2BCB</ManifestCertificateThumbprint>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestKeyFile>UtilityApp_TemporaryKey.pfx</ManifestKeyFile>
+    <ManifestKeyFile>PowerGuard_TemporaryKey.pfx</ManifestKeyFile>
   </PropertyGroup>
   <PropertyGroup>
     <GenerateManifests>true</GenerateManifests>
@@ -36,7 +43,7 @@
     <SignManifests>true</SignManifests>
     <UseWindowsForms>True</UseWindowsForms>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <StartupObject>UtilityApp.App</StartupObject>
+    <StartupObject>PowerGuard.App</StartupObject>
     <GeneratePackageOnBuild>False</GeneratePackageOnBuild>
   </PropertyGroup>
   <ItemGroup>

@@ -1,9 +1,142 @@
-﻿<Window x:Class="UtilityApp.ShutdownCountdownWindow"
+﻿<Window x:Class="PowerGuard.ShutdownCountdownWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="关机倒计时" Height="200" Width="300">
-    <Grid>
-        <TextBlock x:Name="CountdownTextBlock" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="24"/>
-        <Button Content="取消" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,0,0,20" Click="CancelButton_Click"/>
-    </Grid>
+        Title="PowerGuard - 关机倒计时" Height="260" Width="380" 
+        WindowStartupLocation="CenterScreen"
+        WindowStyle="None" 
+        Background="Transparent"
+        AllowsTransparency="True"
+        Topmost="True"
+        ResizeMode="NoResize">
+    
+    <Window.Resources>
+        <!-- 现代化按钮样式 -->
+        <Style x:Key="ModernButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="#FF4444"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="FontFamily" Value="Microsoft YaHei"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="Margin" Value="8"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="MinWidth" Value="100"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center" 
+                                            VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#FF6666"/>
+                </Trigger>
+                <Trigger Property="IsPressed" Value="True">
+                    <Setter Property="Background" Value="#CC3333"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- 进度条样式 -->
+        <Style x:Key="CountdownProgressBarStyle" TargetType="ProgressBar">
+            <Setter Property="Background" Value="#333333"/>
+            <Setter Property="Foreground" Value="#FF4444"/>
+            <Setter Property="Height" Value="6"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Border Background="{TemplateBinding Background}" 
+                                CornerRadius="3">
+                            <Grid>
+                                <Border Name="PART_Track" 
+                                        Background="{TemplateBinding Background}" 
+                                        CornerRadius="3"/>
+                                <Border Name="PART_Indicator" 
+                                        Background="{TemplateBinding Foreground}" 
+                                        HorizontalAlignment="Left" 
+                                        CornerRadius="3"/>
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <!-- 主要内容区域 -->
+    <Border Background="#2A2A2A" 
+            BorderBrush="#444444" 
+            BorderThickness="1" 
+            CornerRadius="8">
+        <Grid Margin="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- 警告图标和标题 -->
+            <StackPanel Grid.Row="0" Orientation="Horizontal" 
+                       HorizontalAlignment="Center" Margin="0,8,0,12">
+                <TextBlock Text="⚠" FontSize="28" Foreground="#FF4444" 
+                          VerticalAlignment="Center" Margin="0,0,8,0"
+                          FontFamily="Microsoft YaHei"/>
+                <TextBlock Text="PowerGuard - 系统即将关机" FontSize="16" FontWeight="Bold" 
+                          Foreground="White" VerticalAlignment="Center"
+                          FontFamily="Microsoft YaHei"/>
+            </StackPanel>
+
+            <!-- 倒计时显示 -->
+            <StackPanel Grid.Row="1" HorizontalAlignment="Center" 
+                       VerticalAlignment="Center" Margin="0,8,0,12">
+                <TextBlock x:Name="CountdownTextBlock" 
+                          Text="120" 
+                          FontSize="42" 
+                          FontWeight="Bold" 
+                          Foreground="#FF4444" 
+                          HorizontalAlignment="Center"
+                          FontFamily="Microsoft YaHei"/>
+                <TextBlock Text="秒后自动关机" 
+                          FontSize="12" 
+                          Foreground="#CCCCCC" 
+                          HorizontalAlignment="Center" 
+                          TextAlignment="Center"
+                          FontFamily="Microsoft YaHei" Margin="0,0,0,5"/>
+            </StackPanel>
+
+            <!-- 进度条 -->
+            <ProgressBar x:Name="CountdownProgressBar" 
+                        Grid.Row="2" 
+                        Style="{StaticResource CountdownProgressBarStyle}"
+                        Maximum="100" 
+                        Value="100" 
+                        Margin="0,8"/>
+
+            <!-- 说明文本 -->
+            <TextBlock Grid.Row="3" 
+                      Text="PowerGuard检测到网络中断，为保护数据系统将自动关机。" 
+                      FontSize="11" 
+                      Foreground="#CCCCCC" 
+                      TextWrapping="Wrap" 
+                      HorizontalAlignment="Center" 
+                      TextAlignment="Center"
+                      FontFamily="Microsoft YaHei"
+                      Margin="0,8"/>
+
+            <!-- 取消按钮 -->
+            <Button Grid.Row="4" 
+                   Content="取消关机" 
+                   Style="{StaticResource ModernButtonStyle}"
+                   HorizontalAlignment="Center" 
+                   Click="CancelButton_Click"/>
+        </Grid>
+    </Border>
 </Window>
